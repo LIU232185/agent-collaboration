@@ -1,0 +1,289 @@
+{
+  "status": "passed",
+  "scope": "synthetic controller forward/backward only",
+  "seed": 1234,
+  "torch_version": "2.14.1+cpu",
+  "device": "cpu",
+  "source_sha256": "580606e25360db8e0192c261720566811b8ba4fea3de3cb570b5d81e2830bf93",
+  "tasks": [
+    2,
+    0
+  ],
+  "collaborations": [
+    3,
+    5
+  ],
+  "agent_counts": [
+    3,
+    3
+  ],
+  "role_indices": [
+    [
+      0,
+      2,
+      2
+    ],
+    [
+      4,
+      6,
+      2
+    ]
+  ],
+  "llm_indices": [
+    [
+      3,
+      2,
+      0
+    ],
+    [
+      3,
+      4,
+      0
+    ]
+  ],
+  "loss": 4.049665927886963,
+  "gradient_l1": {
+    "task": 325.14514605514705,
+    "collaboration": 634.6815747063665,
+    "number": 234.0190027805511,
+    "role": 1902.8682791194879,
+    "llm": 352.46407087556145
+  },
+  "parameter_updates": {
+    "task": true,
+    "collaboration": true,
+    "number": true,
+    "role": true,
+    "llm": true
+  },
+  "edge_agent_counts": [
+    1,
+    6
+  ],
+  "api_calls": 0,
+  "topologies": {
+    "IO": {
+      "spatial": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "rounds": 1
+    },
+    "CoT": {
+      "spatial": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "rounds": 1
+    },
+    "Chain": {
+      "spatial": [
+        [
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ]
+      ],
+      "rounds": 1
+    },
+    "FullConnected": {
+      "spatial": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ]
+      ],
+      "rounds": 1
+    },
+    "Debate": {
+      "spatial": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ]
+      ],
+      "rounds": 2
+    },
+    "Reflection": {
+      "spatial": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "temporal": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "rounds": 1
+    }
+  },
+  "benchmark_accuracy": null
+}

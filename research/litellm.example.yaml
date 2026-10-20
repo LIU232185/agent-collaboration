@@ -1,0 +1,18 @@
+# Replace provider model IDs with ones available to your account.
+# Run: litellm --config research/litellm.example.yaml --host 127.0.0.1 --port 4000
+# Provider credentials stay in gateway environment, not in the browser.
+model_list:
+  - model_name: research-analyst
+    litellm_params:
+      model: os.environ/PROVIDER_ANALYST_MODEL
+      api_key: os.environ/PROVIDER_API_KEY
+  - model_name: research-critic
+    litellm_params:
+      model: os.environ/PROVIDER_CRITIC_MODEL
+      api_key: os.environ/PROVIDER_CRITIC_API_KEY
+  - model_name: research-embedding
+    litellm_params:
+      model: os.environ/PROVIDER_EMBEDDING_MODEL
+      api_key: os.environ/PROVIDER_EMBEDDING_API_KEY
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

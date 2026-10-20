@@ -1,0 +1,7 @@
+{
+  "name": "agent-learning-lab",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node --env-file-if-exists=.env lab.mjs", "ui": "node --env-file-if-exists=.env server.mjs", "board": "node --env-file-if-exists=.env board/server.mjs", "test": "node --test" },
+  "engines": { "node": ">=22" }
+}

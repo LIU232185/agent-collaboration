@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: research
+      POSTGRES_USER: research
+      POSTGRES_PASSWORD: ${RESEARCH_DB_PASSWORD:-research_local}
+    ports:
+      - "127.0.0.1:5438:5432"
+    volumes:
+      - research_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U research -d research"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  research_postgres:

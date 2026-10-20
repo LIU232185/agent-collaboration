@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>共研 · 协作任务看板</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/resilience.css"><script type="module" src="/app.js"></script></head>
+<body>
+<header><a href="/" class="brand">◈ 共研 <span>协作任务看板</span></a><span id="connection">连接中</span></header>
+<main>
+  <aside class="input-panel">
+    <div class="eyebrow">WORKSPACE / 01</div><h1>把问题交给<br>一个协作团队。</h1><p class="intro">从任务拆解到方案审查，观察每一步实际交接。</p>
+    <form id="task-form"><label for="question">你想解决什么问题？</label><textarea id="question" maxlength="4000" required placeholder="例如：为新员工设计一个两周入职培训方案，列出步骤和验收标准。"></textarea>
+      <button type="button" id="example" class="subtle">填入示例 ↗</button>
+      <label for="mode">协作方式</label><select id="mode"><option value="auto">自动选择 · 关键词规则</option><option value="model" disabled>DeepSeek 选择 · 需真实模型</option><option value="chain">链式协作 · 逐步交接</option><option value="parallel">并行探索 · 汇合审查</option><option value="debate">多视角讨论 · 汇合审查</option></select>
+      <label for="backend">执行后端</label><select id="backend"><option value="demo">本地演示 · 零 API 费用</option><option value="live" disabled>真实模型 · 尚未配置</option></select>
+      <button id="reload-config" type="button" class="subtle">重新读取本地 API 配置 ↻</button><p id="config-status" class="note" role="status"></p>
+      <label id="cost-row" class="check" hidden><input id="cost" type="checkbox"><span id="cost-label">确认本次最多 4 次模型调用会产生费用</span></label>
+      <p id="mode-note" class="note">演示输出为规则模板，不会真实回答任意问题。</p>
+      <label class="check"><input id="resilience" type="checkbox">启用故障与恢复实验</label>
+      <div id="experiment-controls" hidden>
+        <div class="experiment-params"><label for="quantity">商品数量<input id="quantity" type="number" min="1" max="100000" value="12"></label><label for="unit-price">单价 / 元<input id="unit-price" type="number" min="1" max="100000" value="35"></label></div>
+        <label for="fault">中间计算员的故障</label><select id="fault"><option value="wrong_total">错误金额 · 多算一件</option><option value="missing_basis">遗漏计算依据</option><option value="none">不注入故障 · 干净对照</option></select>
+        <label for="protection">交接保护</label><select id="protection"><option value="both">Challenger + Inspector</option><option value="none">无防护 · 直接传递</option><option value="challenger">Challenger · 接收方质疑</option><option value="inspector">Inspector · 交接前检查</option></select>
+        <label for="retry-budget">恢复预算</label><select id="retry-budget"><option value="1">允许一次重算</option><option value="0">不重算 · 发现异常即阻断</option></select>
+        <p class="note experiment-note">受控算术案例，可独立验算；自动运行四组对照。规则实现，不代表论文的 LLM 实验效果。</p>
+      </div>
+      <button id="start" class="primary" type="submit">开始协作 <span>→</span></button>
+    </form>
+    <div id="error" role="alert" hidden></div>
+    <div class="history-heading"><h2>最近任务</h2><span>本地保存</span></div><div id="history" class="history"></div>
+  </aside>
+  <section class="workspace">
+    <div class="workspace-head"><div><div class="eyebrow">LIVE COLLABORATION</div><h2 id="run-title">协作现场</h2></div><div class="actions"><button id="export" disabled>导出记录</button><button id="cancel" disabled>停止任务</button></div></div>
+    <div class="run-meta"><span id="run-status" class="badge">等待任务</span><span id="run-mode">尚未选择协作方式</span><span id="run-backend">无模型调用</span></div>
+    <div class="board-grid">
+      <section class="graph-panel"><div class="panel-heading"><h3>智能体协作图</h3><span id="progress">0 / 4 已交付</span></div><div id="graph" class="graph" aria-label="智能体协作关系"></div><div id="route-reason" class="route-note">提交问题后，显示路由选择和节点状态。</div><div class="legend"><span>○ 等待</span><span>◉ 执行中</span><span>✓ 已交付</span></div></section>
+      <section class="detail-panel"><div class="panel-heading"><h3 id="detail-title">节点详情</h3><span id="detail-status">可点击节点</span></div><p id="detail-task" class="note">选择智能体，查看职责、收到的材料和交付内容。</p><div class="detail-tabs"><button id="output-tab" class="selected" aria-pressed="true">交付内容</button><button id="input-tab" aria-pressed="false">收到的材料</button></div><pre id="detail-content">尚无运行记录。</pre></section>
+    </div>
+    <section id="resilience-panel" class="resilience-panel" hidden>
+      <div class="panel-heading"><h3>错误传播与恢复</h3><span>本地单题机制验证</span></div>
+      <div id="resilience-summary" class="resilience-summary" aria-live="polite"></div>
+      <div class="comparison-wrap"><table class="comparison"><caption>同一道题、同一种故障、相同恢复预算 · 四组实际运行</caption><thead><tr><th>保护方式</th><th>检出 / 修复</th><th>异常交接</th><th>最终金额</th><th>外部验算</th></tr></thead><tbody id="comparison-body"></tbody></table></div>
+      <p class="comparison-note">异常交接计数包含送达检查器的隔离输入。最终验算同时检查金额与计算依据；阻断不会被计为修复成功。单题结果不代表统计恢复率。</p>
+      <details class="version-details"><summary>查看消息版本与修改原因</summary><pre id="versions"></pre></details>
+      <p class="paper-source">方法参考：<a href="https://proceedings.mlr.press/v267/huang25ay.html" target="_blank" rel="noreferrer">ICML 2025 · MAS-Resilience</a>。本例为独立规则实现，未调用官方模型或复现论文分数。</p>
+    </section>
+    <section class="timeline-panel"><div class="panel-heading"><h3>交接时间线</h3><span id="event-count">0 条事件</span></div><div id="timeline" class="timeline" aria-live="polite"><p class="empty">每次开始、交接和交付都会记录在这里。</p></div></section>
+    <section id="result-panel" class="result-panel" hidden><div class="panel-heading"><h3>最终交付</h3><span id="result-label"></span></div><pre id="result"></pre></section>
+    <footer>支持关键词规则与 DeepSeek 协作方式选择，尚未接入训练后的 MasRouter。角色固定、各节点使用同一模型；连线展示实际调度关系。</footer>
+  </section>
+</main></body></html>

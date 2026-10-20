@@ -1,0 +1,5 @@
+upstream/
+*.pth
+.venv/
+.env
+__pycache__/
