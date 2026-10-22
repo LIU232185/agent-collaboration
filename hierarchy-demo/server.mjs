@@ -10,7 +10,7 @@ await fs.mkdir(store,{recursive:true});await reloadModelEnvironment(root);
 const state={runs:[],experiments:[],connectionChecks:[],policy:initialPolicy};
 try{Object.assign(state,JSON.parse(await fs.readFile(new URL('state.json',store),'utf8')));for(const r of [...state.runs,...state.experiments])if(r.status==='running'){r.status='interrupted';r.error='服务重启中断；未自动续费重试';}}catch(e){if(e.code!=='ENOENT')console.warn('历史记录不可读，使用初始状态');}
 let active=null,controller=null,queue=Promise.resolve();
-const persist=()=>{const data=JSON.stringify(state);queue=queue.catch(()=>{}).then(async()=>{await fs.writeFile(new URL('state.tmp',store),data);await fs.rename(new URL('state.tmp',store),new URL('state.json',store));});return queue;};
+const persist=()=>{const data=JSON.stringify(state);queue=queue.catch(()=>{}).then(async()=>{await fs.writeFile(new URL('state.tmp',store),data);for(let attempt=0;;attempt++){try{await fs.rename(new URL('state.tmp',store),new URL('state.json',store));break;}catch(e){if(!['EPERM','EACCES','EBUSY'].includes(e.code)||attempt>=5)throw e;await new Promise(resolve=>setTimeout(resolve,100));}}});return queue;};
 async function invoke(args,signal){return callModelDetailed(args,{signal});}
 const assets={'/':['console.html','text/html'],'/console.mjs':['console.mjs','text/javascript'],'/console.css':['console.css','text/css']};
 http.createServer(async(req,res)=>{
@@ -39,7 +39,7 @@ http.createServer(async(req,res)=>{
    if(!modelStatus().configured)return json(400,{error:'本地 API 未配置，请检查项目 .env'});
    if(url.pathname==='/api/start'){
     if(modelStatus().provider!=='deepseek')return json(400,{error:'此入口要求真实 DeepSeek API'});
-    const run=createPaperRun({task:body.task,model:modelStatus().model,collaboration:body.collaboration,router:body.router});state.runs.unshift(run);state.runs=state.runs.slice(0,20);controller=new AbortController();active=run.id;await persist();json(202,{id:run.id});
+    const run=createPaperRun({task:body.task,model:modelStatus().model,collaboration:body.collaboration,router:body.router,debateRounds:body.debateRounds,debateMode:body.debateMode});state.runs.unshift(run);state.runs=state.runs.slice(0,20);controller=new AbortController();active=run.id;await persist();json(202,{id:run.id});
     void executePaperRun(run,{invoke,emit:persist,signal:controller.signal}).catch(e=>{run.status='failed';run.error=e.message;}).finally(async()=>{active=null;controller=null;await persist();});return;
    }
    const source=state.runs.find(r=>r.kind!=='paper-live'&&r.id===body.id&&['completed','blocked'].includes(r.status));if(!source)return json(400,{error:'请选择已完成或已阻断的真实运行作为证据'});

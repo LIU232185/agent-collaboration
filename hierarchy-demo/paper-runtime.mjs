@@ -9,14 +9,16 @@ export const modes={
  chain:{name:'顺序链式',description:'摇摆户 → 营销 → 风控，逐级使用已审查结论。',deps:{customer:[],marketing:['customer'],risk:['customer','marketing']}},
  customer_fanout:{name:'需求先行 · 双路并行',description:'摇摆户澄清需求后，营销与风控并行。',deps:{customer:[],marketing:['customer'],risk:['customer']}},
  risk_fanout:{name:'风控先行 · 双路并行',description:'风控先明确边界，摇摆户与营销再并行。',deps:{risk:[],customer:['risk'],marketing:['risk']}},
- debate:{name:'交叉质疑 · 一轮反馈',description:'三个团队先独立分析，再互读初稿、逐队质疑修订，独立审查后综合。',deps:{customer:[],marketing:[],risk:[]}}
+ debate:{name:'多轮交叉辩论',description:'三个团队独立初稿后，按轮互读上一轮已审查结论、回应质疑并更新；每轮独立审查。',deps:{customer:[],marketing:[],risk:[]}}
 };
 class OutputError extends Error{}
 const parse=text=>{try{const p=JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));if(!p||typeof p!=='object'||Array.isArray(p))throw Error();return p;}catch{throw new OutputError('模型 JSON 结构无效');}};
-export function createPaperRun({task,model,collaboration='auto',router='llm'}){
+export function createPaperRun({task,model,collaboration='auto',router='llm',debateRounds=2,debateMode='auto'}){
  if(typeof task!=='string'||!task.trim()||task.length>4000)throw Error('请输入 1–4000 字的问题');
  if(collaboration!=='auto'&&!modes[collaboration])throw Error('不支持的协作方式');if(!['llm','rules'].includes(router))throw Error('训练路由器尚未接入；当前支持 LLM 或规则基线');
- return {id:randomUUID(),kind:'paper-live',version:'fixed-teams-v4',task:task.trim(),model,collaboration,router,status:'running',startedAt:new Date().toISOString(),calls:[],events:[],versions:[],accepted:{},warnings:[],limit:48};
+ if(!Number.isInteger(debateRounds)||debateRounds<1||debateRounds>3)throw Error('辩论轮数须为 1–3 的整数');
+ if(!['auto','fixed'].includes(debateMode))throw Error('辩论结束方式须为 auto 或 fixed');
+ return {debateMode,maxDebateRounds:debateMode==='auto'?3:debateRounds,debateRounds,debateHistory:[],id:randomUUID(),kind:'paper-live',version:'fixed-teams-v4',task:task.trim(),model,collaboration,router,status:'running',startedAt:new Date().toISOString(),calls:[],events:[],versions:[],accepted:{},warnings:[],limit:48};
 }
 export function ruleRoute(task){return /生产|敏感数据|隐私|授权|合规审批/.test(task)?'risk_fanout':/营销|摇摆户|客户/.test(task)?'customer_fanout':'parallel';}
 export function validatePlan(p,model){
@@ -104,16 +106,58 @@ export async function executePaperRun(run,{invoke,emit=async()=>{},signal}){
    if(Object.keys(run.accepted).length===3&&Object.values(run.accepted).every(x=>x.withheld))throw Error('所有团队均无可交接结论，停止综合');
   }
   if(run.plan.mode==='debate'){
-   const firstRound=structuredClone(run.accepted);await event('debate','交叉质疑：向三个团队共享已审查初稿');
-   for(const r of run.plan.roles){
-    const context={question:run.task,identity:r.name,scope:r.scope,previous:firstRound[r.id],peers:Object.fromEntries(Object.entries(firstRound).filter(([id])=>id!==r.id))};
-    const candidate=await ask(r.id+'-challenge',r.name+' · 交叉质疑与更新',worker+'读取同伴消息：有依据的分歧才质疑；说明保留、修改或不适用的理由。',context,r.id,workerValid);
-    run.accepted[r.id]=await gate(r.id+'-debate',r.name+' · 质疑后交接',candidate,context,(previous,issues)=>ask(r.id+'-debate-repair-'+run.versions.filter(v=>v.messageId===r.id+'-debate').length,r.name+' · 质疑后修订',worker,{...context,previous,requiredCorrections:issues},r.id,workerValid));
+   for(let round=1;round<=(run.maxDebateRounds||run.debateRounds||1);round++){
+    signal?.throwIfAborted();
+    if(run.limit-run.calls.length<(run.debateMode==='auto'?9:8)){await warn('预算不足以开始完整下一轮并预留最终综合审查，提前结束辩论');run.debateStopReason='budget';break;}
+    const snapshot=structuredClone(run.accepted),record={round,status:'running',before:snapshot,startedAt:new Date().toISOString(),results:{}};
+    run.debateHistory.push(record);await event('debate_round_start','辩论第 '+round+' 轮：共享上一轮已审查结论',{round});
+    const results=await Promise.allSettled(run.plan.roles.map(async r=>{
+     const suffix=round===1?'':'-r'+round,messageId=r.id+'-debate'+suffix;
+     const context={question:run.task,round,totalRounds:run.maxDebateRounds||run.debateRounds||1,focus:run.debateHistory.at(-2)?.assessment?.openIssues||[],identity:r.name,scope:r.scope,previous:snapshot[r.id],peers:Object.fromEntries(Object.entries(snapshot).filter(([id])=>id!==r.id))};
+     const candidate=await ask(r.id+'-challenge'+suffix,r.name+' · 辩论第 '+round+' 轮',worker+'读取上一轮同伴的已审查消息，逐项回应有依据的质疑，明确保留或修改的观点与理由。不得为辩论强行找分歧、不得把同伴观点当事实。除标准字段外返回 responses:string[]（回应）、changes:string[]（本轮修改）、unresolved:string[]（尚未解决的问题）；answer 必须包含更新后的完整结论。',context,r.id,workerValid);
+     return gate(messageId,r.name+' · 第 '+round+' 轮交接',candidate,context,(previous,issues)=>ask(messageId+'-repair-'+run.versions.filter(v=>v.messageId===messageId).length,r.name+' · 第 '+round+' 轮修订',worker,{...context,previous,requiredCorrections:issues},r.id,workerValid));
+    }));
+    signal?.throwIfAborted();
+    for(const [i,result] of results.entries()){
+     const role=run.plan.roles[i];
+     if(result.status==='fulfilled'&&!result.value.withheld){run.accepted[role.id]=result.value;record.results[role.id]={status:'accepted',payload:result.value};}
+     else{const reason=result.status==='rejected'?result.reason.message:'本轮候选未通过审查';record.results[role.id]={status:'retained_previous',reason};await warn(role.name+' 第 '+round+' 轮不可交接，保留上一轮已审查结论：'+reason);}
+    }
+    record.after=structuredClone(run.accepted);record.status='completed';record.finishedAt=new Date().toISOString();
+    await event('debate_round_end','辩论第 '+round+' 轮完成',{round});
+    if(run.debateMode==='auto'){
+     if(run.limit-run.calls.length<3){run.debateStopReason='budget';await warn('剩余预算仅保留最终交付，停止辩论');break;}
+     try{
+      const assessment=await ask('debate-assess-'+round,'第 '+round+' 轮 · 是否继续辩论',
+       '你是辩论进展评估员，不是业务决策者。比较前后已审查结论与回应，判断继续一轮是否能解决关键问题。不能只因三队声称一致就认定收敛，不得要求强行达成共识。返回 JSON {decision:"continue"|"stop",reasonCode:"stable"|"stalled"|"needs_external"|"progress",reason:string,openIssues:[{id:string,issue:string,evidence:string,canResolveNow:boolean,nextStep:string}],materialChanges:string[],unansweredChallenges:string[]}。openIssues 的 evidence 必须是本轮某一个团队结论中的连续逐字原文片段，直接从 evidenceSources 复制；不得添加团队名前缀、引号、解释，不得拼接不同位置。仅措辞变动不算实质进展；可由现有材料继续解决的关键分歧应continue，已解决则stable，反复无进展则stalled，需外部数据/授权则needs_external。下一轮的nextStep须具体可执行。停止不代表事实正确或达成共识。',
+       {question:run.task,round,before:record.before,after:record.after,evidenceSources:Object.fromEntries(Object.entries(record.after).map(([id,value])=>[id,{answer:value.answer,unresolved:value.unresolved||[],concerns:value.concerns||[]}])),previousAssessment:run.debateHistory.at(-2)?.assessment||null,branchStatus:record.results},undefined,x=>{
+        if(!['continue','stop'].includes(x.decision)||!['stable','stalled','needs_external','progress'].includes(x.reasonCode)||typeof x.reason!=='string'||!x.reason.trim()||!Array.isArray(x.openIssues)||!Array.isArray(x.materialChanges)||!Array.isArray(x.unansweredChallenges))throw new OutputError('辩论评估字段无效');
+        const values=v=>typeof v==='string'?[v]:v&&typeof v==='object'?Object.values(v).flatMap(values):[];const corpus=values(record.after).join('\n');
+        for(const q of x.openIssues)if(!q||typeof q.id!=='string'||typeof q.issue!=='string'||typeof q.canResolveNow!=='boolean'||typeof q.nextStep!=='string'||typeof q.evidence!=='string'||q.evidence.trim().length<4||!corpus.includes(q.evidence))throw new OutputError('未解决问题缺少有效原文定位');
+        if([...x.materialChanges,...x.unansweredChallenges].some(v=>typeof v!=='string'))throw new OutputError('进展描述须为字符串');return x;
+       });
+      record.assessment=assessment;
+      const same=Object.keys(record.before).every(id=>record.before[id]?.answer===record.after[id]?.answer);
+      const actionable=assessment.openIssues.some(x=>x.canResolveNow)||assessment.unansweredChallenges.length>0;
+      let reason=same?'stalled':assessment.reasonCode;
+      let stop=same||assessment.decision==='stop';
+      if(!same&&reason==='progress')stop=false;
+      if(!actionable&&reason==='needs_external')stop=true;
+      if(round>=2&&!assessment.materialChanges.length&&run.debateHistory.at(-2)?.assessment?.materialChanges.length===0){stop=true;reason='stalled';}
+      if(actionable&&!same&&(reason==='stable'||reason==='needs_external'||(reason==='stalled'&&round<2))){stop=false;reason='progress';}
+      if(Object.values(record.results).some(x=>x.status!=='accepted')&&stop&&reason==='stable')reason='partial';
+      record.stopCheck={stop,reason,modelDecision:assessment.decision};
+      await event('debate_assessment','第 '+round+' 轮评估：'+(stop?'停止讨论':'继续下一轮'),{round,assessment,stopCheck:record.stopCheck});
+      if(stop){run.debateStopReason=reason;if(reason!=='stable')await warn('自动结束辩论：'+assessment.reason+'；未解决问题保留在最终交付材料中');break;}
+     }catch(e){signal?.throwIfAborted();run.debateStopReason='assessment_failed';await warn('进展评估不可用，停止追加辩论并保留已审查材料：'+e.message);break;}
+    }
+    if(round===(run.maxDebateRounds||run.debateRounds||1)){run.debateStopReason=run.debateMode==='auto'?'round_limit':'fixed_rounds';if(run.debateMode==='auto')await warn('达到自动辩论安全上限3轮，不代表所有分歧已解决');}
+
    }
   }
-  const prompt='你是最终交付者。直接回答原始问题，使用固定三团队的已审查材料；团队不适用时明确说明，不强行把校招生当客户。用户报告的现象作为分析起点，不能用缺少数据否定题目或拒绝给方案；无法量化的判断标明条件。先给具体成因机制和可操作建议，再给核验项，不能只复述执行过程。没有内部数据就说明边界，不捏造本行事实。withheld 内容不能用作依据。正文约 1000–1400 汉字。返回 JSON {executiveSummary:string,actions:string[],assumptions:string[],limitations:string[]}。';
+  const prompt='你是最终交付者。直接回答原始问题，使用固定三团队的已审查材料；团队不适用时明确说明，不强行把校招生当客户。用户报告的现象作为分析起点，不能用缺少数据否定题目或拒绝给方案；无法量化的判断标明条件。先给具体成因机制和可操作建议，再给核验项，不能只复述执行过程。没有内部数据就说明边界，不捏造本行事实。withheld 内容不能用作依据。若有辩论进展评估，应在limitations中保留未解决问题与停止原因；不能因停止就声称已经达成共识或事实已核实。正文约 1000–1400 汉字。返回 JSON {executiveSummary:string,actions:string[],assumptions:string[],limitations:string[]}。';
   const validDelivery=x=>{if(typeof x.executiveSummary!=='string'||!x.executiveSummary.trim()||!Array.isArray(x.actions)||x.actions.some(a=>typeof a!=='string'))throw new OutputError('最终交付字段无效');return x;};
-  const draft=await ask('synthesis','综合交付',prompt,{question:run.task,accepted:run.accepted,warnings:run.warnings},undefined,validDelivery,5000);
+  const draft=await ask('synthesis','综合交付',prompt,{question:run.task,accepted:run.accepted,warnings:run.warnings,debateRoundsCompleted:run.debateHistory.length,debateStopReason:run.debateStopReason,debateAssessments:run.debateHistory.map(x=>x.assessment).filter(Boolean)},undefined,validDelivery,5000);
   const delivery=await gate('synthesis','最终交付',draft,{accepted:run.accepted},(previous,issues)=>ask('synthesis-repair-'+run.versions.filter(v=>v.messageId==='synthesis').length,'最终交付 · 修订',prompt,{question:run.task,accepted:run.accepted,previous,requiredCorrections:issues},undefined,validDelivery,5000));
   if(delivery.withheld){run.status='needs_review';run.partial=run.accepted;run.error='最终候选仍有实质问题，保留已通过的团队结果，需人工复核';}
   else{run.delivery=delivery;run.status=run.warnings.length||Object.values(run.accepted).some(x=>x.withheld)?'completed_with_warnings':'completed';}
