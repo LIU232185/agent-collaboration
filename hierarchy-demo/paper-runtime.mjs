@@ -6,27 +6,33 @@ export const teams=[
 ];
 export const modes={
  parallel:{name:'并行会诊',description:'三个顶层团队独立分析，最后综合；减少前序观点锚定。',deps:{customer:[],marketing:[],risk:[]}},
- chain:{name:'顺序链式',description:'摇摆户 → 营销 → 风控，逐级使用已审查结论。',deps:{customer:[],marketing:['customer'],risk:['customer','marketing']}},
+ chain:{name:'动态链式',description:'按问题选择三个团队的先后，后续团队读取前面全部已审查结论。',deps:{customer:[],marketing:['customer'],risk:['customer','marketing']}},
  customer_fanout:{name:'需求先行 · 双路并行',description:'摇摆户澄清需求后，营销与风控并行。',deps:{customer:[],marketing:['customer'],risk:['customer']}},
  risk_fanout:{name:'风控先行 · 双路并行',description:'风控先明确边界，摇摆户与营销再并行。',deps:{risk:[],customer:['risk'],marketing:['risk']}},
  debate:{name:'多轮交叉辩论',description:'三个团队独立初稿后，按轮互读上一轮已审查结论、回应质疑并更新；每轮独立审查。',deps:{customer:[],marketing:[],risk:[]}}
 };
 class OutputError extends Error{}
 const parse=text=>{try{const p=JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));if(!p||typeof p!=='object'||Array.isArray(p))throw Error();return p;}catch{throw new OutputError('模型 JSON 结构无效');}};
-export function createPaperRun({task,model,collaboration='auto',router='llm',debateRounds=2,debateMode='auto'}){
+export function createPaperRun({task,model,collaboration='auto',router='llm',debateRounds=2,debateMode='auto',chainOrder='auto'}){
  if(typeof task!=='string'||!task.trim()||task.length>4000)throw Error('请输入 1–4000 字的问题');
  if(collaboration!=='auto'&&!modes[collaboration])throw Error('不支持的协作方式');if(!['llm','rules'].includes(router))throw Error('训练路由器尚未接入；当前支持 LLM 或规则基线');
  if(!Number.isInteger(debateRounds)||debateRounds<1||debateRounds>3)throw Error('辩论轮数须为 1–3 的整数');
  if(!['auto','fixed'].includes(debateMode))throw Error('辩论结束方式须为 auto 或 fixed');
- return {debateMode,maxDebateRounds:debateMode==='auto'?3:debateRounds,debateRounds,debateHistory:[],id:randomUUID(),kind:'paper-live',version:'fixed-teams-v4',task:task.trim(),model,collaboration,router,status:'running',startedAt:new Date().toISOString(),calls:[],events:[],versions:[],accepted:{},warnings:[],limit:48};
+ if(chainOrder!=='auto')validateChainOrder(chainOrder);
+ return {chainOrder,debateMode,maxDebateRounds:debateMode==='auto'?3:debateRounds,debateRounds,debateHistory:[],id:randomUUID(),kind:'paper-live',version:'fixed-teams-v4',task:task.trim(),model,collaboration,router,status:'running',startedAt:new Date().toISOString(),calls:[],events:[],versions:[],accepted:{},warnings:[],limit:48};
 }
 export function ruleRoute(task){return /生产|敏感数据|隐私|授权|合规审批/.test(task)?'risk_fanout':/营销|摇摆户|客户/.test(task)?'customer_fanout':'parallel';}
+export function validateChainOrder(order){
+ if(!Array.isArray(order)||order.length!==3||new Set(order).size!==3||order.some(id=>!teams.some(t=>t.id===id)))throw new OutputError('链式顺序必须包含三个已注册团队且各一次');return [...order];
+}
+export function ruleChainOrder(task){return /生产|敏感|隐私|授权|客户数据/.test(task)?['risk','customer','marketing']:/已有.*方案|现有.*方案|评审.*方案|优化.*方案/.test(task)?['marketing','customer','risk']:['customer','marketing','risk'];}
 export function validatePlan(p,model){
  if(!modes[p.mode]||typeof p.reason!=='string'||!p.reason.trim())throw new OutputError('协作方式或理由无效');
  // 身份和子 Agent 均由注册表控制，模型只能对现有团队分派工作。
+ const chainOrder=p.mode==='chain'?validateChainOrder(p.chainOrder||['customer','marketing','risk']):undefined;
  const assignments=p.assignments||{};
  if(Object.keys(assignments).some(id=>!teams.some(t=>t.id===id)))throw new OutputError('禁止创建注册表以外的顶层角色');
- return {mode:p.mode,name:modes[p.mode].name,reason:p.reason,roles:teams.map(t=>({...structuredClone(t),model,task:typeof assignments[t.id]==='string'?assignments[t.id].slice(0,1000):t.scope,dependencies:[...modes[p.mode].deps[t.id]]})),candidateModels:[model]};
+ return {chainOrder,orderSource:p.orderSource,mode:p.mode,name:modes[p.mode].name,reason:p.reason,roles:teams.map(t=>({...structuredClone(t),model,task:typeof assignments[t.id]==='string'?assignments[t.id].slice(0,1000):t.scope,dependencies:chainOrder?chainOrder.slice(0,chainOrder.indexOf(t.id)):[...modes[p.mode].deps[t.id]]})),candidateModels:[model]};
 }
 const codes=new Set(['fabricated_fact','contradiction','unsupported_execution','unsafe_action','missing_core_answer']);
 export function normalizeReview(review,payload){
@@ -85,8 +91,17 @@ export async function executePaperRun(run,{invoke,emit=async()=>{},signal}){
   else if(run.router==='rules'){decision={mode:ruleRoute(run.task),reason:'可审计规则基线：敏感/权限类优先风控，客户营销类需求先行，其余并行；没有训练或最优性保证。'};run.selectedBy='rules';}
   else{
    run.selectedBy='llm';await event('planning','在固定团队和方式候选中自动选择');
-   try{decision=await ask('planner','MasRouter 思想 · 受约束规划','你是任务路由器。现有顶层团队和子 Agent 已固定，只能分派工作，绝不能生成组织发展师等新顶层角色。选择一个候选协作方式，并为 customer、marketing、risk 分配贴合问题且不越出团队边界的任务。题目不属于客户营销时，明确适用限制，不能把校招生当成摇摆户。返回 JSON {mode:string,reason:string,assignments:{customer:string,marketing:string,risk:string}}。',{question:run.task,teams,modes,candidateModels:[run.model]},undefined,x=>{validatePlan(x,run.model);return x;});}
+   try{decision=await ask('planner','MasRouter 思想 · 受约束规划','你是任务路由器。现有顶层团队和子 Agent 已固定，只能分派工作，绝不能生成组织发展师等新顶层角色。选择一个候选协作方式，并为 customer、marketing、risk 分配贴合问题且不越出团队边界的任务。题目不属于客户营销时，明确适用限制，不能把校招生当成摇摆户。若选择chain，额外返回chainOrder（customer、marketing、risk各一次）及理由，按问题与职责确定先后，不能总用同一顺序。返回 JSON {mode:string,reason:string,chainOrder?:string[],assignments:{customer:string,marketing:string,risk:string}}。',{question:run.task,teams,modes,candidateModels:[run.model]},undefined,x=>{validatePlan(x,run.model);return x;});}
    catch(e){if(!(e instanceof OutputError))throw e;decision={mode:'parallel',reason:'模型规划经一次结构纠正仍无效，显式采用固定团队并行基线。'};run.selectedBy='explicit-fallback';await warn(decision.reason);}
+  }
+  if(decision.mode==='chain'){
+   if(Array.isArray(run.chainOrder)){decision.chainOrder=validateChainOrder(run.chainOrder);decision.orderSource='manual';decision.reason+='；链式顺序由用户指定';}
+   else if(run.router==='rules'){decision.chainOrder=ruleChainOrder(run.task);decision.orderSource='rules';decision.reason+='；按权限优先、已有方案优先或需求优先的规则选择顺序';}
+   else if(decision.chainOrder){validateChainOrder(decision.chainOrder);decision.orderSource='llm';}
+   else{
+    try{const order=await ask('chain-router','动态链式 · 选择团队顺序','你是链式顺序路由器。根据问题和团队能力决定谁先分析、谁后接收前序结论。只使用三个注册团队各一次，不创建角色。权限/数据边界可风控优先，已有方案可营销优先，需求分析可摇摆户优先；结合具体问题，不机械套规则。返回JSON {chainOrder:string[],reason:string}。',{question:run.task,teams},undefined,x=>{validateChainOrder(x.chainOrder);if(typeof x.reason!=='string'||!x.reason.trim())throw new OutputError('缺少选序理由');return x;});decision.chainOrder=order.chainOrder;decision.orderSource='llm';decision.reason+='；'+order.reason;}
+    catch(e){if(!(e instanceof OutputError))throw e;decision.chainOrder=ruleChainOrder(run.task);decision.orderSource='explicit-fallback';await warn('链式选序经结构纠正仍无效，显式使用规则顺序');}
+   }
   }
   run.plan=validatePlan(decision,run.model);run.plan.selectedBy=run.selectedBy;await event('plan','已确定固定团队协作图',{plan:run.plan});
   while(Object.keys(run.accepted).length<3){
