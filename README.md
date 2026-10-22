@@ -1,16 +1,20 @@
 # Agent 学习实验室
 
-## 首次运行协作看板
+新增：[论文驱动的 DeepSeek 协作看板](hierarchy-demo/README.md)。运行 npm run hierarchy，打开 http://127.0.0.1:4323/ 。直接输入问题，固定摇摆户、营销、风控三团队；支持手动、LLM 或规则选择五种协作方式，独立审查交接消息，支持隔离、修订与复审；所有调用可查看真实输入输出和用量。支持 VPN 系统网络与 HTTP(S) 代理，会产生 API 用量。
+
+## 首次运行最终论文协作 Demo
 
 需要 Node.js 22 或更新版本。克隆仓库后，在项目目录运行：
 
 ```powershell
 Copy-Item .env.deepseek.example .env
-# 在本地 .env 填写 DEEPSEEK_API_KEY；不填写也能使用离线演示
-npm run board
+# 在本地 .env 填写 DEEPSEEK_API_KEY
+npm run hierarchy
 ```
 
-浏览器打开 http://127.0.0.1:4322/ 。填好密钥后，在页面点击“重新读取本地 API 配置”；选择“DeepSeek 选择”可由模型决定协作方式。真实模式最多调用 5 次模型，会产生费用。
+浏览器打开 http://127.0.0.1:4323/ 。填好密钥后，在页面重新读取本地 API 配置。可手动选择五种拓扑，或由 LLM / 规则自动选择；卡片展示下一次选择，连线图展示本次实际执行。执行、Inspector 审查及修订均调用真实模型，会产生费用；单任务最多 48 次请求，同时最多两个请求。最终 Demo 需要有效密钥，不提供假答案回退。
+
+运行 `npm test` 执行离线回归，不调用付费 API。完整功能、论文对应关系和实现边界见 [最终 Demo 说明](hierarchy-demo/README.md)，讲解见 [技术讲解](hierarchy-demo/技术讲解.md) 与 [汇报讲解](hierarchy-demo/汇报讲解.md)。旧版离线看板仍可通过 `npm run board` 打开（端口 4322）。
 
 仓库不包含 API 密钥、个人任务运行记录、虚拟环境和本机配置。论文官方仓库未打包，获取方式与验证边界见 `reproductions/` 下的说明。GitHub 保存源码；该 Node.js 后台不能直接通过 GitHub Pages 运行。
 
@@ -73,3 +77,4 @@ data/lessons/                     待验证及已确认教学记录
 这里的学习指持续积累可加载的知识和方法，不更新模型参数。当前编排是固定流程，尚未实现自主消息路由、独立测试题库、可执行技能或向量检索。
 
 接口依据：https://developers.openai.com/api/docs/quickstart
+

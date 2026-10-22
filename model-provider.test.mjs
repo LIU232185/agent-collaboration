@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {modelConfig,callModel,reloadModelEnvironment} from './model-provider.mjs';
+import {modelConfig,callModel,callModelDetailed,reloadModelEnvironment} from './model-provider.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 const env={LLM_PROVIDER:'deepseek',DEEPSEEK_API_KEY:'fake-test-key'};
+test('通用协作启用官方 JSON 模式，截断失败仍保留计费用量',async()=>{
+ await assert.rejects(callModelDetailed({instructions:'返回 JSON',input:'问题',jsonMode:true},{env,fetchImpl:async(url,opts)=>{assert.deepEqual(JSON.parse(opts.body).response_format,{type:'json_object'});return {ok:true,json:async()=>({usage:{total_tokens:123},choices:[{finish_reason:'length',message:{content:'{'}}]})};}}),error=>{assert.equal(error.metadata.usage.total_tokens,123);return /未完整完成/.test(error.message);});
+});
+test('API 证据保留实际 HTTP 状态、响应 ID、模型及用量，不暴露密钥',async()=>{
+ const result=await callModelDetailed({instructions:'JSON',input:'check',jsonMode:true},{env,fetchImpl:async()=>({ok:true,status:200,json:async()=>({id:'provider-response-123',model:'returned-model',usage:{total_tokens:7},choices:[{finish_reason:'stop',message:{content:'{"ok":true}'}}]})})});
+ assert.equal(result.httpStatus,200);assert.equal(result.responseId,'provider-response-123');assert.equal(result.model,'returned-model');assert.equal(result.usage.total_tokens,7);assert.equal(result.endpoint,'https://api.deepseek.com/chat/completions');assert.ok(Number.isFinite(Date.parse(result.receivedAt)));assert.doesNotMatch(JSON.stringify(result),/fake-test-key|Authorization/);
+});
 test('DeepSeek 使用 Chat Completions、非思考模式和正文输出，不泄露推理内容',async()=>{
   let called=0;
   const output=await callModel({instructions:'职责',input:'问题'},{env,fetchImpl:async(url,opts)=>{

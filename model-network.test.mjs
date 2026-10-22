@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {resolveNetwork} from './model-network.mjs';
+test('关闭的 Windows 遗留代理不能启用',()=>assert.equal(resolveNetwork({},{enabled:false,server:'127.0.0.1:7890'}).proxy,''));
+test('代理遵守环境与启用的系统配置，本机绕过',()=>{const n=resolveNetwork({HTTPS_PROXY:'http://127.0.0.1:7890'});assert.equal(n.proxy,'http://127.0.0.1:7890');assert.match(n.proxyEnv.NO_PROXY,/127.0.0.1/);assert.equal(resolveNetwork({},{enabled:true,server:'http=127.0.0.1:1;https=127.0.0.1:2'}).proxy,'http://127.0.0.1:2');assert.equal(resolveNetwork({LLM_NETWORK_MODE:'direct',HTTPS_PROXY:'http://127.0.0.1:1'}).proxy,'');});
+test('不隐式使用 SOCKS 或未配置的强制代理',()=>{assert.throws(()=>resolveNetwork({ALL_PROXY:'socks5://127.0.0.1:1'}));assert.throws(()=>resolveNetwork({LLM_NETWORK_MODE:'proxy'}));});
