@@ -1,4 +1,5 @@
 .env
+agents.json
 data/
 node_modules/
 .venv/
@@ -18,3 +19,5 @@ research/preview.png
 demo/runs/
 demo/latest-report.html
 learning/output/
+
+work/

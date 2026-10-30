@@ -4,6 +4,8 @@
 
 新增：[论文驱动的 DeepSeek 协作看板](hierarchy-demo/README.md)。运行 npm run hierarchy，打开 http://127.0.0.1:4323/ 。直接输入问题，固定摇摆户、营销、风控三团队；支持手动、LLM 或规则选择五种协作方式，独立审查交接消息，支持隔离、修订与复审；所有调用可查看真实输入输出和用量。支持 VPN 系统网络与 HTTP(S) 代理，会产生 API 用量。
 
+层间看板可选接入已有 HTTP JSON Agent：将根目录 `agents.example.json` 复制为 `agents.json`，按 [外部 Agent 接入说明](hierarchy-demo/README.md) 配置 URL 与 `.env` 密钥变量，再在页面点击“重读 API 配置”。
+
 ## 首次运行最终论文协作 Demo
 
 需要 Node.js 22 或更新版本。克隆仓库后，在项目目录运行：

@@ -6,6 +6,18 @@
 
 当前支持固定摇摆户/营销/风控三团队、五种拓扑、按问题动态链式顺序、自动结束多轮辩论、负责人质疑、Inspector审查、最多两次内容修订、失败隔离、真实API输入输出与用量记录。
 
+### 接入外部 Agent（HTTP JSON）
+
+可将任一团队内执行 Agent 接到已有 Agent 服务。复制根目录 `agents.example.json` 为 `agents.json`，填写 `profile`、`hesitation`、`offer`、`measurement`、`permission`、`basis` 对应的 HTTPS 调用地址；将密钥写入本机 `.env`，配置中的 `apiKeyEnv` 填变量名。不要把 `agents.json` 或密钥提交到 Git。完成后点击页面“重读 API 配置”，该 Agent 请求会由本机服务端转发；未配置的 Agent 仍走当前模型提供方。规划、团队汇总、Inspector 与最终综合暂时仍使用主模型。
+
+平台向配置的 URL 发 POST JSON，请求字段为 `protocol`（固定 `agent-collaboration.v1`）、`task_id`、`agent_id`、`instructions`、`input`、`json_mode`、`max_output_tokens`。若配置 `apiKeyEnv`，服务端添加 `Authorization: Bearer <key>`。Agent 返回 JSON，正文使用 `output`、`text` 或 `result` 字符串字段；可选返回 `usage` 和 `request_id`。输出仍经过现有 JSON 校验与 Inspector 审查。默认超时 60 秒，上限 180 秒；HTTPS 必需，本地开发允许 localhost HTTP。
+
+每个配置项只会替换对应子 Agent 的模型调用，规划、团队汇总、Inspector 与最终综合仍使用主模型。该适配器是同步请求/响应协议；运行状态仍由本地看板轮询。服务仍仅监听本机，公网部署前需要另行增加调用方身份认证、权限控制和限流。
+
+### 在平台内创建 Agent
+
+打开“Agent 工作台”，选一个现有团队角色位，填写名称和角色说明，输入测试任务后点“试运行”；满意后点“保存并加入协作”。自定义 Agent 配置保存在 Git 忽略的 `data/hierarchy-v2/custom-agents.json`，仅覆盖后续新运行中选定的子 Agent 角色位。试运行和正式协作都使用 `.env` 的主模型；试运行会真实调用并产生用量。每次正式运行仍经过现有团队汇总和 Inspector。
+
 动态链式默认结合问题选择顺序，可使用LLM或规则，并在高级设置手动指定六种排列。后续团队读取全部前序已审查消息，最终综合仍有Inspector。执行中跨团队退回和重新规划尚未实现。
 
 辩论默认自动判断何时停止，每轮互读上轮审查快照、回应更新并复审，再评估进展。稳定、无进展、需外部信息或达到上限时明确记录原因，不强求共识。固定轮数在高级设置中保留，自动模式最多3轮。

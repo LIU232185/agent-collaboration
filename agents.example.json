@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "profile": { "name": "Customer Profile Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "CUSTOMER_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true },
+    "hesitation": { "name": "Customer Hesitation Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "CUSTOMER_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true },
+    "offer": { "name": "Marketing Offer Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "MARKETING_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true },
+    "measurement": { "name": "Marketing Measurement Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "MARKETING_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true },
+    "permission": { "name": "Risk Permission Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "RISK_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true },
+    "basis": { "name": "Risk Evidence Agent", "url": "https://agent.example.com/v1/invoke", "apiKeyEnv": "RISK_AGENT_API_KEY", "timeoutMs": 60000, "enabled": true }
+  }
+}
